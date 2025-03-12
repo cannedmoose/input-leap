@@ -918,6 +918,7 @@ Config::readSectionLinks(ConfigReadContext& s)
 			throw XConfigRead(s, "argument before first screen");
 		}
 		else {
+			// TODO CALLAN
 			// parse argument:  `<name>[(<s0>,<e0>)]=<value>[(<s1>,<e1>)]'
 			// the stuff in brackets is optional.  interval values must be
 			// in the range [0,100] and start < end.  if not given the
