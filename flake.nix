@@ -15,7 +15,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        input-leap = { withLibei ? true }: pkgs.stdenv.mkDerivation rec {
+        input-leap-pkg = { withLibei ? true }: pkgs.stdenv.mkDerivation rec {
           pname = "input-leap";
           version = "3.0.2";
 
@@ -89,9 +89,9 @@
       in
       {
         packages = {
-          default = input-leap { };
-          input-leap = input-leap { };
-          input-leap-no-libei = input-leap { withLibei = false; };
+          default = input-leap-pkg { };
+          input-leap = input-leap-pkg { };
+          input-leap-no-libei = input-leap-pkg { withLibei = false; };
         };
 
         apps = {
