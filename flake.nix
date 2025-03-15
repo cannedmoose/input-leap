@@ -59,11 +59,11 @@
             )
           '';
 
-          postFixup = ''
+          /*postFixup = ''
             echo "Running postFixup, substituting desktop file paths"
             substituteInPlace $out/share/applications/io.github.input_leap.InputLeap.desktop \
               --replace "Exec=input-leap" "Exec=$out/bin/input-leap"
-          '';
+          '';*/
 
           meta = {
             description = "Open-source KVM software";
@@ -90,12 +90,12 @@
           input-leap-no-libei = input-leap-pkg { withLibei = false; };
         };
 
-        apps = {
+        /*apps = {
           default = {
             type = "app";
             program = "${self.packages.${system}.default}/bin/input-leap";
           };
-        };
+        };*/
 
         # NOTE TO GET WORKING WITH GCC USED:
         # https://discourse.nixos.org/t/get-clangd-to-find-standard-headers-in-nix-shell/11268
