@@ -130,7 +130,6 @@
           shellHook = ''
             echo "Input Leap development environment loaded"
             echo "Build dependencies installed"
-            export DEBUG=1
           '';
         };
       });
