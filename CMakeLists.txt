@@ -18,8 +18,8 @@
 cmake_minimum_required(VERSION 3.21)
 project(InputLeap C CXX)
 
-option(INPUTLEAP_BUILD_GUI "Build the GUI" ON)
-option(INPUTLEAP_BUILD_TESTS "Build the tests" ON)
+option(INPUTLEAP_BUILD_GUI "Build the GUI" OFF)
+option(INPUTLEAP_BUILD_TESTS "Build the tests" OFF)
 option(INPUTLEAP_USE_EXTERNAL_GTEST "Use external installation of Google Test framework" OFF)
 option(INPUTLEAP_BUILD_X11 "Build with XWindows support" ON)
 option(INPUTLEAP_BUILD_LIBEI "Build with libei support" OFF)
@@ -34,6 +34,8 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS)
   set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES 
       ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
 endif()
+
+set (CMAKE_BUILD_TYPE "Debug")
 
 if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions (-DNDEBUG)

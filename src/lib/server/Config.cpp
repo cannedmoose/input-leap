@@ -209,7 +209,8 @@ Config::removeAllAliases()
 
 bool Config::connect(const std::string& srcName, EDirection srcSide,
                      float srcStart, float srcEnd, const std::string& dstName,
-                     float dstStart, float dstEnd)
+                     float dstStart, float dstEnd,
+					 float srcDepth, float dstDepth)
 {
 	assert(srcSide >= kFirstDirection && srcSide <= kLastDirection);
 
@@ -220,8 +221,8 @@ bool Config::connect(const std::string& srcName, EDirection srcSide,
 	}
 
 	// add link
-	CellEdge srcEdge(srcSide, Interval(srcStart, srcEnd));
-	CellEdge dstEdge(dstName, srcSide, Interval(dstStart, dstEnd));
+	CellEdge srcEdge(srcSide, Interval(srcStart, srcEnd), srcDepth);
+	CellEdge dstEdge(dstName, srcSide, Interval(dstStart, dstEnd), dstDepth);
 	return index->second.add(srcEdge, dstEdge);
 }
 
@@ -435,7 +436,7 @@ std::string Config::getCanonicalName(const std::string& name) const
 }
 
 std::string Config::getNeighbor(const std::string& srcName, EDirection srcSide,
-                                float position, float* positionOut) const
+                                float position, float* positionOut, float* depthIn, float* depthOut) const
 {
 	assert(srcSide >= kFirstDirection && srcSide <= kLastDirection);
 
@@ -456,6 +457,14 @@ std::string Config::getNeighbor(const std::string& srcName, EDirection srcSide,
 		if (positionOut != nullptr) {
 			*positionOut =
 				dstEdge->inverseTransform(srcEdge->transform(position));
+		}
+
+		if (depthOut != nullptr) {
+			*depthOut = dstEdge->depth();
+		}
+
+		if (depthIn != nullptr) {
+			*depthIn = srcEdge->depth();
 		}
 
 		// return neighbor's name
@@ -479,7 +488,7 @@ bool Config::hasNeighbor(const std::string& srcName, EDirection srcSide,
 		return false;
 	}
 
-	return index->second.overlaps(CellEdge(srcSide, Interval(start, end)));
+	return index->second.overlaps(CellEdge(srcSide, Interval(start, end), 0));
 }
 
 Config::link_const_iterator Config::beginNeighbor(const std::string& srcName) const
@@ -929,8 +938,11 @@ Config::readSectionLinks(ConfigReadContext& s)
 			s.parseNameWithArgs("link", line, "=", i, side, srcArgs);
 			++i;
 			s.parseNameWithArgs("screen", line, "", i, dstScreen, dstArgs);
-			Interval srcInterval(s.parseInterval(srcArgs));
-			Interval dstInterval(s.parseInterval(dstArgs));
+			
+			float srcDepth;
+			float dstDepth;
+			Interval srcInterval(s.parseInterval(srcArgs, &srcDepth));
+			Interval dstInterval(s.parseInterval(dstArgs, &dstDepth));
 
 			// handle argument
 			EDirection dir;
@@ -956,7 +968,8 @@ Config::readSectionLinks(ConfigReadContext& s)
 			if (!connect(screen, dir,
 						srcInterval.first, srcInterval.second,
 						dstScreen,
-						dstInterval.first, dstInterval.second)) {
+						dstInterval.first, dstInterval.second,
+						srcDepth, dstDepth)) {
 				throw XConfigRead(s, "overlapping range");
 			}
 		}
@@ -1439,25 +1452,25 @@ bool Config::Name::operator==(const std::string& name) const
 
 Config::CellEdge::CellEdge(EDirection side, float position)
 {
-	init("", side, Interval(position, position));
+	init("", side, Interval(position, position), 0);
 }
 
-Config::CellEdge::CellEdge(EDirection side, const Interval& interval)
+Config::CellEdge::CellEdge(EDirection side, const Interval& interval, const float depth)
 {
 	assert(interval.first >= 0.0f);
 	assert(interval.second <= 1.0f);
 	assert(interval.first < interval.second);
 
-	init("", side, interval);
+	init("", side, interval, depth);
 }
 
-Config::CellEdge::CellEdge(const std::string& name, EDirection side, const Interval& interval)
+Config::CellEdge::CellEdge(const std::string& name, EDirection side, const Interval& interval, const float depth)
 {
 	assert(interval.first >= 0.0f);
 	assert(interval.second <= 1.0f);
 	assert(interval.first < interval.second);
 
-	init(name, side, interval);
+	init(name, side, interval, depth);
 }
 
 Config::CellEdge::~CellEdge()
@@ -1465,13 +1478,14 @@ Config::CellEdge::~CellEdge()
 	// do nothing
 }
 
-void Config::CellEdge::init(const std::string& name, EDirection side, const Interval& interval)
+void Config::CellEdge::init(const std::string& name, EDirection side, const Interval& interval, const float depth)
 {
 	assert(side != kNoDirection);
 
 	m_name     = name;
 	m_side     = side;
 	m_interval = interval;
+	m_depth = depth;
 }
 
 Config::Interval
@@ -1527,6 +1541,12 @@ float
 Config::CellEdge::inverseTransform(float x) const
 {
 	return x * (m_interval.second - m_interval.first) + m_interval.first;
+}
+
+float
+Config::CellEdge::depth() const
+{
+	return m_depth;
 }
 
 bool
@@ -2011,12 +2031,13 @@ OptionValue ConfigReadContext::parseCorners(const std::string& args) const
 }
 
 Config::Interval
-ConfigReadContext::parseInterval(const ArgList& args) const
+ConfigReadContext::parseInterval(const ArgList& args, float* depth) const
 {
 	if (args.size() == 0) {
+		*depth = 0; 
 		return Config::Interval(0.0f, 1.0f);
 	}
-	if (args.size() != 2 || args[0].empty() || args[1].empty()) {
+	if ((args.size() != 2 && args.size() != 3)  || args[0].empty() || args[1].empty()) {
 		throw XConfigRead(*this, "invalid interval \"%{1}\"", concatArgs(args));
 	}
 
@@ -2030,11 +2051,22 @@ ConfigReadContext::parseInterval(const ArgList& args) const
 		throw XConfigRead(*this, "invalid interval \"%{1}\"", concatArgs(args));
 	}
 
+	double depthValue = 0;
+	if (args.size() == 3) {
+		depthValue = strtod(args[2].c_str(), &end);
+		if (end[0] != '\0') {
+			throw XConfigRead(*this, "invalid interval \"%{1}\"", concatArgs(args));
+		}
+	}
+
 	if (startValue < 0 || startValue > 100 ||
 		endValue   < 0 || endValue   > 100 ||
+		depthValue   < 0 || depthValue   > 100 ||
 		startValue >= endValue) {
 		throw XConfigRead(*this, "invalid interval \"%{1}\"", concatArgs(args));
 	}
+
+	*depth = depthValue/100.0;
 
 	return Config::Interval(static_cast<float>(startValue / 100.0), static_cast<float>(endValue / 100.0));
 }

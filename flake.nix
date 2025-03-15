@@ -101,10 +101,11 @@
           };
         };
 
-        devShells.default = let
-          mcc-env = (pkgs.callPackage mini-compile-commands {}).wrap pkgs.clangStdenv;
-          mkShell = pkgs.mkShell.override { stdenv = mcc-env; };
-        in  mkShell {
+        # NOTE TO GET WORKING WITH GCC USED:
+        # https://discourse.nixos.org/t/get-clangd-to-find-standard-headers-in-nix-shell/11268
+
+        devShells.default = pkgs.mkShell {
+          packages = [pkgs.lldb];
           buildInputs = [
             pkgs.cmake
             pkgs.pkg-config
@@ -124,15 +125,12 @@
             pkgs.libportal
             pkgs.openssl
             pkgs.clang-tools
-            pkgs.llvmPackages_latest.lldb
-            pkgs.llvmPackages_latest.libllvm
-            pkgs.llvmPackages_latest.libcxx
-            pkgs.llvmPackages_latest.clang
           ];
 
           shellHook = ''
             echo "Input Leap development environment loaded"
             echo "Build dependencies installed"
+            export DEBUG=1
           '';
         };
       });

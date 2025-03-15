@@ -216,18 +216,20 @@ private:
     // direction.
     float mapToFraction(BaseClientProxy*, EDirection, std::int32_t x, std::int32_t y) const;
 
-    // convert fraction to pixel position, writing only x or y depending
-    // on the direction.
-    void mapToPixel(BaseClientProxy*, EDirection, float f, std::int32_t& x, std::int32_t& y) const;
+    // convert fraction to pixel position
+    void mapToPixel(BaseClientProxy*, EDirection, float f, float depth, std::int32_t& x, std::int32_t& y) const;
 
     // returns true if the client has a neighbor anywhere along the edge
     // indicated by the direction.
     bool hasAnyNeighbor(BaseClientProxy*, EDirection) const;
 
+    std::int32_t getTrueBound(BaseClientProxy *src, EDirection dir,
+        std::int32_t &x, std::int32_t &y) const;
+
     // lookup neighboring screen, mapping the coordinate independent of
     // the direction to the neighbor's coordinate space.
     BaseClientProxy* getNeighbor(BaseClientProxy*, EDirection, std::int32_t& x,
-                                 std::int32_t& y) const;
+                                 std::int32_t& y, float * inDepth) const;
 
     // lookup neighboring screen.  given a position relative to the
     // source screen, find the screen we should move onto and where.
@@ -406,6 +408,8 @@ private:
 
     // current mouse position (in absolute screen coordinates) on
     // whichever screen is active
+    // TODO(callan) do they mean in a global space or a pewr screen space?
+    // LOOKS LIKE IT'S GLOBAL BUT YOU SHOULD MAKE SURE....
     std::int32_t m_x, m_y;
 
     // last mouse deltas.  this is needed to smooth out double tap

@@ -41,3 +41,4 @@ compile_commands.json
 # Cache (used by clangd)
 .cache
 .direnv
+/tmp

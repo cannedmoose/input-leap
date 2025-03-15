@@ -67,8 +67,8 @@ public:
     class CellEdge {
     public:
         CellEdge(EDirection side, float position);
-        CellEdge(EDirection side, const Interval&);
-        CellEdge(const std::string& name, EDirection side, const Interval&);
+        CellEdge(EDirection side, const Interval&, const float depth);
+        CellEdge(const std::string& name, EDirection side, const Interval&, const float depth);
         ~CellEdge();
 
         Interval getInterval() const;
@@ -84,6 +84,8 @@ public:
         // transform [0,1] to position
         float inverseTransform(float x) const;
 
+        float depth() const;
+
         // compares side and start of interval
         bool            operator<(const CellEdge&) const;
 
@@ -92,12 +94,19 @@ public:
         bool            operator!=(const CellEdge&) const;
 
     private:
-        void init(const std::string& name, EDirection side, const Interval&);
+        void init(const std::string& name, EDirection side, const Interval&, const float depth);
 
     private:
         std::string m_name;
         EDirection m_side;
         Interval m_interval;
+
+        // TODO(callan) FILL THIS IN
+        /**
+        Need to include for constructors
+        need to have a way to map a cell edge depth with screen to get an actual edge position...
+        */
+        float m_depth;
     };
 
 private:
@@ -258,7 +267,7 @@ public:
     be inside the range [0,1].
     */
     bool connect(const std::string& srcName, EDirection srcSide, float srcStart, float srcEnd,
-                 const std::string& dstName, float dstStart, float dstEnd);
+                 const std::string& dstName, float dstStart, float dstEnd, float srcDepth, float dstDepth);
 
     //! Disconnect screens
     /*!
@@ -359,7 +368,8 @@ public:
     \c nullptr.
     */
     std::string getNeighbor(const std::string&, EDirection,
-                            float position, float* positionOut) const;
+                            float position, float* positionOut,
+                            float* depthIn, float* depthOut) const;
 
     //! Check for neighbor
     /*!
@@ -487,7 +497,7 @@ public:
     OptionValue parseCorner(const std::string&) const;
     OptionValue parseCorners(const std::string&) const;
 
-    Config::Interval parseInterval(const ArgList& args) const;
+    Config::Interval parseInterval(const ArgList& args, float* depth) const;
 
     void parseNameWithArgs(const std::string& type, const std::string& line,
                            const std::string& delim, std::string::size_type& index,

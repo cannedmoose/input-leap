@@ -45,6 +45,7 @@
 #include "base/Time.h"
 
 #include <climits>
+#include <cstddef>
 #include <cstring>
 #include <cstdlib>
 #include <sstream>
@@ -400,6 +401,11 @@ void Server::switchScreen(BaseClientProxy* dst, std::int32_t x, std::int32_t y, 
 {
 	assert(dst != nullptr);
 
+	// TODO
+	/*
+		- the assert below needs to take into account True(TM) bounds
+		- best is to updae x/y to be true bounds before switching screen...
+	*/
 #ifndef NDEBUG
 	{
 		std::int32_t dx, dy, dw, dh;
@@ -514,7 +520,7 @@ float Server::mapToFraction(BaseClientProxy* client, EDirection dir, std::int32_
 	return 0.0f;
 }
 
-void Server::mapToPixel(BaseClientProxy* client, EDirection dir, float f, std::int32_t& x,
+void Server::mapToPixel(BaseClientProxy* client, EDirection dir, float f, float depth, std::int32_t& x,
                         std::int32_t& y) const
 {
 	std::int32_t sx, sy, sw, sh;
@@ -523,11 +529,21 @@ void Server::mapToPixel(BaseClientProxy* client, EDirection dir, float f, std::i
 	case kLeft:
 	case kRight:
 		y = static_cast<std::int32_t>(f * sh) + sy;
+		if(dir == kLeft) {
+			x -= static_cast<std::int32_t>(depth * sw);
+		} else {
+			x += static_cast<std::int32_t>(depth * sw);
+		}
 		break;
 
 	case kTop:
 	case kBottom:
 		x = static_cast<std::int32_t>(f * sw) + sx;
+		if(dir == kLeft) {
+			y += static_cast<std::int32_t>(depth * sh);
+		} else {
+			y -= static_cast<std::int32_t>(depth * sh);
+		}
 		break;
 
 	case kNoDirection:
@@ -546,8 +562,62 @@ Server::hasAnyNeighbor(BaseClientProxy* client, EDirection dir) const
 	return m_config->hasNeighbor(getName(client), dir);
 }
 
+std::int32_t Server::getTrueBound(BaseClientProxy *src, EDirection dir,
+                                  std::int32_t &x, std::int32_t &y) const {
+  // note -- must be locked on entry
+
+  assert(src != nullptr);
+
+  // get source screen name
+  std::string srcName = getName(src);
+  assert(!srcName.empty());
+  LOG_DEBUG2("find neighbor on %s of \"%s\"", Config::dirName(dir),
+             srcName.c_str());
+
+  // convert position to fraction
+  float t = mapToFraction(src, dir, x, y);
+
+  // search for the closest neighbor that exists in direction dir
+  float tTmp;
+  float dinTmp;
+  float doutTmp;
+  std::string dstName(
+      m_config->getNeighbor(srcName, dir, t, &tTmp, &dinTmp, &doutTmp));
+  
+  // if nothing in that direction then return depth in is 0
+  if (dstName.empty()) {
+    dinTmp = 0;
+  }
+
+  std::int32_t dx, dy, dw, dh;
+  src->getShape(dx, dy, dw, dh);
+
+  switch (dir) {
+  case kLeft:
+    return dx + static_cast<std::uint32_t>(dw * dinTmp);
+    break;
+
+  case kRight:
+    return dw - static_cast<std::uint32_t>(dw * dinTmp);
+    break;
+
+  case kTop:
+    return dy + static_cast<std::uint32_t>(dh * dinTmp);
+    break;
+
+  case kBottom:
+    return dh - static_cast<std::uint32_t>(dh * dinTmp);
+    break;
+
+  case kNoDirection:
+    assert(0 && "bad direction");
+  default:
+    break;
+  }
+}
+
 BaseClientProxy* Server::getNeighbor(BaseClientProxy* src, EDirection dir, std::int32_t& x,
-                                     std::int32_t& y) const
+                                     std::int32_t& y, float * inDepth) const
 {
 	// note -- must be locked on entry
 
@@ -563,8 +633,10 @@ BaseClientProxy* Server::getNeighbor(BaseClientProxy* src, EDirection dir, std::
 
 	// search for the closest neighbor that exists in direction dir
 	float tTmp;
+	float dinTmp;
+	float doutTmp;
 	for (;;) {
-        std::string dstName(m_config->getNeighbor(srcName, dir, t, &tTmp));
+        std::string dstName(m_config->getNeighbor(srcName, dir, t, &tTmp, &dinTmp, &doutTmp));
 
 		// if nothing in that direction then return nullptr. if the
 		// destination is the source then we can make no more
@@ -579,8 +651,11 @@ BaseClientProxy* Server::getNeighbor(BaseClientProxy* src, EDirection dir, std::
 		// ready then we can stop.
         auto index = m_clients.find(dstName);
 		if (index != m_clients.end()) {
-			LOG_DEBUG2("\"%s\" is on %s of \"%s\" at %f", dstName.c_str(), Config::dirName(dir), srcName.c_str(), t);
-			mapToPixel(index->second, dir, tTmp, x, y);
+			LOG_INFO("\"%s\" is on %s of \"%s\" at %f", dstName.c_str(), Config::dirName(dir), srcName.c_str(), t);
+			mapToPixel(index->second, dir, tTmp, doutTmp, x, y);
+			if(inDepth != nullptr) {
+				*inDepth = dinTmp;
+			}
 			return index->second;
 		}
 
@@ -601,10 +676,14 @@ BaseClientProxy* Server::mapToNeighbor(BaseClientProxy* src, EDirection srcSide,
 	assert(src != nullptr);
 
 	// get the first neighbor
-	BaseClientProxy* dst = getNeighbor(src, srcSide, x, y);
+	float inDepth;
+	BaseClientProxy* dst = getNeighbor(src, srcSide, x, y, &inDepth);
 	if (dst == nullptr) {
 		return nullptr;
 	}
+
+	std::int32_t ax, ay, aw, ah;
+	src->getShape(ax, ay, aw, ah);
 
 	// get the source screen's size
 	std::int32_t dx, dy, dw, dh;
@@ -618,64 +697,70 @@ BaseClientProxy* Server::mapToNeighbor(BaseClientProxy* src, EDirection srcSide,
 	// actual on exit from the search.
 	switch (srcSide) {
 	case kLeft:
+		LOG_INFO("SOME INFO LEFT %i %i", x,dx);	
 		x -= dx;
 		while (dst != nullptr) {
 			lastGoodScreen = dst;
 			lastGoodScreen->getShape(dx, dy, dw, dh);
-			x += dw;
+			x += dw - static_cast<std::uint32_t>(aw * inDepth);
+			LOG_INFO("SOME INFO LEFT %i %i", x,dw);	
 			if (x >= 0) {
 				break;
 			}
 			LOG_DEBUG2("skipping over screen %s", getName(dst).c_str());
-			dst = getNeighbor(lastGoodScreen, srcSide, x, y);
+			dst = getNeighbor(lastGoodScreen, srcSide, x, y, nullptr);
 		}
 		assert(lastGoodScreen != nullptr);
 		x += dx;
 		break;
 
 	case kRight:
+	LOG_INFO("SOME INFO RIGHT");	
 		x -= dx;
 		while (dst != nullptr) {
-			x -= dw;
+			x -= dw - static_cast<std::uint32_t>(aw * inDepth);
 			lastGoodScreen = dst;
 			lastGoodScreen->getShape(dx, dy, dw, dh);
 			if (x < dw) {
 				break;
 			}
 			LOG_DEBUG2("skipping over screen %s", getName(dst).c_str());
-			dst = getNeighbor(lastGoodScreen, srcSide, x, y);
+			dst = getNeighbor(lastGoodScreen, srcSide, x, y, nullptr);
 		}
 		assert(lastGoodScreen != nullptr);
 		x += dx;
 		break;
 
 	case kTop:
+	LOG_INFO("SOME INFO TOP");	
 		y -= dy;
 		while (dst != nullptr) {
 			lastGoodScreen = dst;
 			lastGoodScreen->getShape(dx, dy, dw, dh);
-			y += dh;
+			y += dh - static_cast<std::uint32_t>(ah * inDepth);
+			//LOG_INFO("SOME INFO 2 %i %i", y,dh);	
 			if (y >= 0) {
 				break;
 			}
 			LOG_DEBUG2("skipping over screen %s", getName(dst).c_str());
-			dst = getNeighbor(lastGoodScreen, srcSide, x, y);
+			dst = getNeighbor(lastGoodScreen, srcSide, x, y, nullptr);
 		}
 		assert(lastGoodScreen != nullptr);
 		y += dy;
 		break;
 
 	case kBottom:
+	LOG_INFO("SOME INFO BOTTOM");	
 		y -= dy;
 		while (dst != nullptr) {
-			y -= dh;
+			y -= dh - static_cast<std::uint32_t>(ah * inDepth);
 			lastGoodScreen = dst;
 			lastGoodScreen->getShape(dx, dy, dw, dh);
 			if (y < dh) {
 				break;
 			}
 			LOG_DEBUG2("skipping over screen %s", getName(dst).c_str());
-			dst = getNeighbor(lastGoodScreen, srcSide, x, y);
+			dst = getNeighbor(lastGoodScreen, srcSide, x, y, nullptr);
 		}
 		assert(lastGoodScreen != nullptr);
 		y += dy;
@@ -712,33 +797,39 @@ void Server::avoidJumpZone(BaseClientProxy* dst, EDirection dir, std::int32_t& x
     const std::string dstName(getName(dst));
 	std::int32_t dx, dy, dw, dh;
 	dst->getShape(dx, dy, dw, dh);
+	dx = getTrueBound(dst, kLeft, x, y);
+	dy = getTrueBound(dst, kTop, x, y);
+	dw = getTrueBound(dst, kRight, x, y);
+	dh = getTrueBound(dst, kBottom, x, y);
+
 	float t = mapToFraction(dst, dir, x, y);
 	std::int32_t z = getJumpZoneSize(dst);
 
 	// move in far enough to avoid the jump zone.  if entering a side
 	// that doesn't have a neighbor (i.e. an asymmetrical side) then we
 	// don't need to move inwards because that side can't provoke a jump.
+	// TODO(callan) should consider depthIn for primary here...
 	switch (dir) {
 	case kLeft:
-		if (!m_config->getNeighbor(dstName, kRight, t, nullptr).empty() &&
+		if (!m_config->getNeighbor(dstName, kRight, t, nullptr, nullptr, nullptr).empty() &&
 			x > dx + dw - 1 - z)
 			x = dx + dw - 1 - z;
 		break;
 
 	case kRight:
-		if (!m_config->getNeighbor(dstName, kLeft, t, nullptr).empty() &&
+		if (!m_config->getNeighbor(dstName, kLeft, t, nullptr, nullptr, nullptr).empty() &&
 			x < dx + z)
 			x = dx + z;
 		break;
 
 	case kTop:
-		if (!m_config->getNeighbor(dstName, kBottom, t, nullptr).empty() &&
+		if (!m_config->getNeighbor(dstName, kBottom, t, nullptr, nullptr, nullptr).empty() &&
 			y > dy + dh - 1 - z)
 			y = dy + dh - 1 - z;
 		break;
 
 	case kBottom:
-		if (!m_config->getNeighbor(dstName, kTop, t, nullptr).empty() &&
+		if (!m_config->getNeighbor(dstName, kTop, t, nullptr, nullptr, nullptr).empty() &&
 			y < dy + z)
 			y = dy + z;
 		break;
@@ -1356,7 +1447,7 @@ void Server::handle_switch_in_direction_event(const Event& event)
 
 	// jump to screen in chosen direction from center of this screen
 	std::int32_t x = m_x, y = m_y;
-    BaseClientProxy* newScreen = getNeighbor(m_active, info.m_direction, x, y);
+    BaseClientProxy* newScreen = getNeighbor(m_active, info.m_direction, x, y, nullptr);
 	if (newScreen == nullptr) {
         LOG_DEBUG1("no neighbor %s", Config::dirName(info.m_direction));
 	}
@@ -1675,8 +1766,14 @@ bool Server::onMouseMovePrimary(std::int32_t x, std::int32_t y)
 
 	// get screen shape
 	std::int32_t ax, ay, aw, ah;
-	m_active->getShape(ax, ay, aw, ah);
+	std::int32_t aax, aay, aaw, aah;
+	m_active->getShape(aax, aay, aaw, aah);
 	std::int32_t zoneSize = getJumpZoneSize(m_active);
+
+	ax = getTrueBound(m_active, kLeft, m_x, m_y);
+	ay = getTrueBound(m_active, kTop, m_x, m_y);
+	aw = getTrueBound(m_active, kRight, m_x, m_y);
+	ah = getTrueBound(m_active, kBottom, m_x, m_y);
 
 	// clamp position to screen
 	std::int32_t xc = x, yc = y;
@@ -1845,6 +1942,10 @@ void Server::onMouseMoveSecondary(std::int32_t dx, std::int32_t dy)
 	// get screen shape
 	std::int32_t ax, ay, aw, ah;
 	m_active->getShape(ax, ay, aw, ah);
+	ax = getTrueBound(m_active, kLeft, m_x, m_y);
+	ay = getTrueBound(m_active, kTop, m_x, m_y);
+	aw = getTrueBound(m_active, kRight, m_x, m_y);
+	ah = getTrueBound(m_active, kBottom, m_x, m_y);
 
 	// find direction of neighbor and get the neighbor
 	bool jump = true;
@@ -1877,8 +1978,7 @@ void Server::onMouseMoveSecondary(std::int32_t dx, std::int32_t dy)
 		}
 		else if (m_y > ay + ah - 1) {
 			dir = kBottom;
-		}
-		else {
+		} else {
 			// we haven't left the screen
 			newScreen = m_active;
 			jump      = false;
@@ -1929,6 +2029,7 @@ void Server::onMouseMoveSecondary(std::int32_t dx, std::int32_t dy)
 			jump      = false;
 		}
 	} while (false);
+	//jump = false;
 
 	if (jump) {
 		if (m_sendFileThread != nullptr) {
@@ -1938,6 +2039,7 @@ void Server::onMouseMoveSecondary(std::int32_t dx, std::int32_t dy)
 
 		std::int32_t newX = m_x;
 		std::int32_t newY = m_y;
+		
 
 		// switch screens
 		switchScreen(newScreen, newX, newY, false);
@@ -1948,24 +2050,24 @@ void Server::onMouseMoveSecondary(std::int32_t dx, std::int32_t dy)
 		m_y = yOld + dy;
 		if (m_x < ax) {
 			m_x = ax;
-			LOG_DEBUG2("clamp to left of \"%s\"", getName(m_active).c_str());
+			LOG_INFO("clamp to left of \"%s\"", getName(m_active).c_str());
 		}
 		else if (m_x > ax + aw - 1) {
 			m_x = ax + aw - 1;
-			LOG_DEBUG2("clamp to right of \"%s\"", getName(m_active).c_str());
+			LOG_INFO("clamp to right of \"%s\"", getName(m_active).c_str());
 		}
 		if (m_y < ay) {
+			LOG_INFO("clamp to top of \"%s\" %i %i", getName(m_active).c_str(), m_y, ay);
 			m_y = ay;
-			LOG_DEBUG2("clamp to top of \"%s\"", getName(m_active).c_str());
 		}
 		else if (m_y > ay + ah - 1) {
+			LOG_INFO("clamp to bottom of \"%s\" %i %i", getName(m_active).c_str(), m_y,  ay + ah - 1);
 			m_y = ay + ah - 1;
-			LOG_DEBUG2("clamp to bottom of \"%s\"", getName(m_active).c_str());
 		}
 
 		// warp cursor if it moved.
 		if (m_x != xOld || m_y != yOld) {
-			LOG_DEBUG2("move on %s to %d,%d", getName(m_active).c_str(), m_x, m_y);
+			LOG_INFO("move on %s to %d,%d", getName(m_active).c_str(), m_x, m_y);
 			m_active->mouseMove(m_x, m_y);
 		}
 	}
