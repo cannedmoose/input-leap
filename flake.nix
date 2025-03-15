@@ -47,8 +47,8 @@
           ];
 
           cmakeFlags = [
-            "-DINPUTLEAP_REVISION=${builtins.substring 0 8 src.rev}"
-          ] ++ pkgs.lib.optional withLibei "-DINPUTLEAP_BUILD_LIBEI=ON";
+            "-DINPUTLEAP_REVISION=3.02"
+          ] ++ (pkgs.lib.optional withLibei "-DINPUTLEAP_BUILD_LIBEI=ON");
 
           dontWrapGApps = true;
           preFixup = ''
@@ -78,10 +78,6 @@
             homepage = "https://github.com/input-leap/input-leap";
             license = pkgs.lib.licenses.gpl2Plus;
             maintainers = with pkgs.lib.maintainers; [
-              kovirobi
-              phryneas
-              twey
-              shymega
             ];
             platforms = pkgs.lib.platforms.linux;
           };
