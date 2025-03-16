@@ -539,7 +539,7 @@ void Server::mapToPixel(BaseClientProxy* client, EDirection dir, float f, float 
 	case kTop:
 	case kBottom:
 		x = static_cast<std::int32_t>(f * sw) + sx;
-		if(dir == kLeft) {
+		if(dir == kBottom) {
 			y += static_cast<std::int32_t>(depth * sh);
 		} else {
 			y -= static_cast<std::int32_t>(depth * sh);
@@ -606,7 +606,7 @@ std::int32_t Server::getTrueBound(BaseClientProxy *src, EDirection dir,
     break;
 
   case kBottom:
-    return dh - static_cast<std::uint32_t>(dh * dinTmp);
+  	return dh - static_cast<std::uint32_t>(dh * dinTmp);
     break;
 
   case kNoDirection:
@@ -697,13 +697,11 @@ BaseClientProxy* Server::mapToNeighbor(BaseClientProxy* src, EDirection srcSide,
 	// actual on exit from the search.
 	switch (srcSide) {
 	case kLeft:
-		LOG_INFO("SOME INFO LEFT %i %i", x,dx);	
 		x -= dx;
 		while (dst != nullptr) {
 			lastGoodScreen = dst;
 			lastGoodScreen->getShape(dx, dy, dw, dh);
 			x += dw - static_cast<std::uint32_t>(aw * inDepth);
-			LOG_INFO("SOME INFO LEFT %i %i", x,dw);	
 			if (x >= 0) {
 				break;
 			}
@@ -715,7 +713,6 @@ BaseClientProxy* Server::mapToNeighbor(BaseClientProxy* src, EDirection srcSide,
 		break;
 
 	case kRight:
-	LOG_INFO("SOME INFO RIGHT");	
 		x -= dx;
 		while (dst != nullptr) {
 			x -= dw - static_cast<std::uint32_t>(aw * inDepth);
@@ -732,7 +729,6 @@ BaseClientProxy* Server::mapToNeighbor(BaseClientProxy* src, EDirection srcSide,
 		break;
 
 	case kTop:
-	LOG_INFO("SOME INFO TOP");	
 		y -= dy;
 		while (dst != nullptr) {
 			lastGoodScreen = dst;
@@ -750,7 +746,6 @@ BaseClientProxy* Server::mapToNeighbor(BaseClientProxy* src, EDirection srcSide,
 		break;
 
 	case kBottom:
-	LOG_INFO("SOME INFO BOTTOM");	
 		y -= dy;
 		while (dst != nullptr) {
 			y -= dh - static_cast<std::uint32_t>(ah * inDepth);
@@ -2067,7 +2062,7 @@ void Server::onMouseMoveSecondary(std::int32_t dx, std::int32_t dy)
 
 		// warp cursor if it moved.
 		if (m_x != xOld || m_y != yOld) {
-			LOG_INFO("move on %s to %d,%d", getName(m_active).c_str(), m_x, m_y);
+			LOG_DEBUG2("move on %s to %d,%d", getName(m_active).c_str(), m_x, m_y);
 			m_active->mouseMove(m_x, m_y);
 		}
 	}

@@ -47,7 +47,7 @@
           ];
 
           cmakeFlags = [
-            "-DINPUTLEAP_REVISION=3.02"
+            "-DINPUTLEAP_REVISION=${toString (self.shortRev or self.dirtyShortRev or self.lastModified or "unknown")}"
           ] ++ (pkgs.lib.optional withLibei "-DINPUTLEAP_BUILD_LIBEI=ON");
 
           dontWrapGApps = true;
