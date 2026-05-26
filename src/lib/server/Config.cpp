@@ -890,6 +890,18 @@ Config::readSectionScreens(ConfigReadContext& s)
 				addOption(screen, kOptionScreenPreserveFocus,
 					s.parseBoolean(value));
 			}
+/**			else if (name == "switchNeedsShift") {
+				addOption(screen, kOptionScreenSwitchNeedsShift,
+					s.parseBoolean(value));
+			}
+			else if (name == "switchNeedsControl") {
+				addOption(screen, kOptionScreenSwitchNeedsControl,
+					s.parseBoolean(value));
+			}
+			else if (name == "switchNeedsAlt") {
+				addOption(screen, kOptionScreenSwitchNeedsAlt,
+					s.parseBoolean(value));
+			}/**/
 			else {
 				// unknown argument
 				throw XConfigRead(s, "unknown argument \"%{1}\"", name);

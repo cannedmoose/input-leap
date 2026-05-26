@@ -415,7 +415,7 @@ void Server::switchScreen(BaseClientProxy* dst, std::int32_t x, std::int32_t y, 
 #endif
 	assert(m_active != nullptr);
 
-	LOG_INFO("switch from \"%s\" to \"%s\" at %d,%d", getName(m_active).c_str(), getName(dst).c_str(), x, y);
+	LOG_DEBUG2("switch from \"%s\" to \"%s\" at %d,%d", getName(m_active).c_str(), getName(dst).c_str(), x, y);
 
 	// stop waiting to switch
 	stopSwitch();
@@ -651,7 +651,7 @@ BaseClientProxy* Server::getNeighbor(BaseClientProxy* src, EDirection dir, std::
 		// ready then we can stop.
         auto index = m_clients.find(dstName);
 		if (index != m_clients.end()) {
-			LOG_INFO("\"%s\" is on %s of \"%s\" at %f", dstName.c_str(), Config::dirName(dir), srcName.c_str(), t);
+			LOG_DEBUG2("\"%s\" is on %s of \"%s\" at %f", dstName.c_str(), Config::dirName(dir), srcName.c_str(), t);
 			mapToPixel(index->second, dir, tTmp, doutTmp, x, y);
 			if(inDepth != nullptr) {
 				*inDepth = dinTmp;
@@ -1569,7 +1569,7 @@ void Server::onClipboardChanged(BaseClientProxy* sender, ClipboardID id, std::ui
 	}
 
 	// got new data
-	LOG_INFO("screen \"%s\" updated clipboard %d", clipboard.m_clipboardOwner.c_str(), id);
+	LOG_DEBUG2("screen \"%s\" updated clipboard %d", clipboard.m_clipboardOwner.c_str(), id);
 	clipboard.m_clipboardData = data;
 
 	// tell all clients except the sender that the clipboard is dirty
@@ -2045,18 +2045,18 @@ void Server::onMouseMoveSecondary(std::int32_t dx, std::int32_t dy)
 		m_y = yOld + dy;
 		if (m_x < ax) {
 			m_x = ax;
-			LOG_INFO("clamp to left of \"%s\"", getName(m_active).c_str());
+			LOG_DEBUG2("clamp to left of \"%s\"", getName(m_active).c_str());
 		}
 		else if (m_x > ax + aw - 1) {
 			m_x = ax + aw - 1;
-			LOG_INFO("clamp to right of \"%s\"", getName(m_active).c_str());
+			LOG_DEBUG2("clamp to right of \"%s\"", getName(m_active).c_str());
 		}
 		if (m_y < ay) {
-			LOG_INFO("clamp to top of \"%s\" %i %i", getName(m_active).c_str(), m_y, ay);
+			LOG_DEBUG2("clamp to top of \"%s\" %i %i", getName(m_active).c_str(), m_y, ay);
 			m_y = ay;
 		}
 		else if (m_y > ay + ah - 1) {
-			LOG_INFO("clamp to bottom of \"%s\" %i %i", getName(m_active).c_str(), m_y,  ay + ah - 1);
+			LOG_DEBUG2("clamp to bottom of \"%s\" %i %i", getName(m_active).c_str(), m_y,  ay + ah - 1);
 			m_y = ay + ah - 1;
 		}
 

@@ -102,7 +102,7 @@ void
 Screen::enter(KeyModifierMask toggleMask)
 {
     assert(m_entered == false);
-    LOG_INFO("entering screen");
+    LOG_DEBUG2("entering screen");
 
     // now on screen
     m_entered = true;
@@ -120,7 +120,7 @@ bool
 Screen::leave()
 {
     assert(m_entered == true);
-    LOG_INFO("leaving screen");
+    LOG_DEBUG2("leaving screen");
 
     if (!m_screen->canLeave()) {
         return false;
